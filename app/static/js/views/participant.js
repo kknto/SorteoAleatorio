@@ -256,24 +256,24 @@ export async function renderParticipantToken(appEl, token) {
           <div class="grid-2">
             <section class="card stack">
               <div>
-                <h2 style="margin: 0; font-size: 1.15rem;">🕵️ Pistas para ${escapeHtml(state.assigned_to_name || "tu amigo")}</h2>
-                <p class="muted" style="margin: 0.25rem 0 0; font-size: 0.84rem;">Envía pistas o preguntas sin revelar tu identidad.</p>
+                <h2 style="margin: 0; font-size: 1.15rem;">💬 Preguntar a ${escapeHtml(state.assigned_to_name || "tu amigo")} (anónimo)</h2>
+                <p class="muted" style="margin: 0.25rem 0 0; font-size: 0.84rem;">Pregúntale tallas, gustos o dale pistas sin revelar tu nombre.</p>
               </div>
               ${renderMessagesHtml(state.to_giftee_messages, state.assigned_to_name || "Destinatario")}
               <form id="msg-giftee-form" class="stack" style="gap: 0.55rem;">
                 <input id="msg-giftee-input" type="text" maxlength="400" placeholder="Ej. ¿Qué talla eres o qué color prefieres?" required />
-                <button type="submit" class="btn btn-primary btn-sm">Enviar pista anónima</button>
+                <button type="submit" class="btn btn-primary btn-sm">Enviar mensaje anónimo</button>
               </form>
             </section>
 
             <section class="card stack">
               <div>
-                <h2 style="margin: 0; font-size: 1.15rem;">💌 Mensajes de tu Amigo Secreto</h2>
-                <p class="muted" style="margin: 0.25rem 0 0; font-size: 0.84rem;">Aquí verás las pistas de quien te regala a ti.</p>
+                <h2 style="margin: 0; font-size: 1.15rem;">💌 Mensajes de quien te regala a ti</h2>
+                <p class="muted" style="margin: 0.25rem 0 0; font-size: 0.84rem;">Lee y responde a la persona que te sacó en el sorteo.</p>
               </div>
-              ${renderMessagesHtml(state.from_santa_messages, "Tu Amigo Secreto")}
+              ${renderMessagesHtml(state.from_santa_messages, "Quien te regala")}
               <form id="msg-santa-form" class="stack" style="gap: 0.55rem;">
-                <input id="msg-santa-input" type="text" maxlength="400" placeholder="Responder a tu Amigo Secreto..." required />
+                <input id="msg-santa-input" type="text" maxlength="400" placeholder="Responder a quien te regala..." required />
                 <button type="submit" class="btn btn-secondary btn-sm">Responder</button>
               </form>
             </section>
