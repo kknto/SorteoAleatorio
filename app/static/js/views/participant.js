@@ -16,7 +16,7 @@ export async function renderParticipantPortal(appEl) {
         <div style="font-weight: 700; margin-bottom: 0.25rem;">¿Cómo funciona?</div>
         <ol class="muted" style="margin: 0; padding-left: 1.2rem; font-size: 0.9rem;">
           <li>Abre tu enlace privado desde WhatsApp.</li>
-          <li>Juega la <strong>Caja Misteriosa</strong> o la <strong>Ruleta Secreta</strong> para descubrir a quién le regalas.</li>
+          <li>Gira la <strong>Ruleta Secreta</strong> para descubrir a quién le regalas.</li>
           <li>Pulsa <strong>Confirmar lectura</strong> y llena tu <strong>Lista de Deseos</strong>.</li>
         </ol>
       </div>
@@ -83,9 +83,14 @@ export async function renderParticipantToken(appEl, token) {
       }
 
       if (!state.revealed) {
-        const modeButtons = REVEAL_GAMES.map(
-          (g) => `<button type="button" class="mode-btn ${g.id === selectedMode ? "active" : ""}" data-mode="${g.id}">${g.label}</button>`
-        ).join("");
+        const modeSwitcherHtml =
+          REVEAL_GAMES.length > 1
+            ? `<div class="mode-switcher" role="group" aria-label="Modo de juego">
+                ${REVEAL_GAMES.map(
+                  (g) => `<button type="button" class="mode-btn ${g.id === selectedMode ? "active" : ""}" data-mode="${g.id}">${g.label}</button>`
+                ).join("")}
+              </div>`
+            : "";
 
         appEl.innerHTML = `
           <div class="stack" style="max-width: 620px; margin: 0 auto;">
@@ -93,9 +98,7 @@ export async function renderParticipantToken(appEl, token) {
               <span class="eyebrow">✨ ${escapeHtml(state.draw_title)}</span>
               <h1 style="margin: 0;">¡Hola, ${escapeHtml(state.name)}!</h1>
               ${chipsHtml}
-              <div class="mode-switcher" role="group" aria-label="Modo de juego">
-                ${modeButtons}
-              </div>
+              ${modeSwitcherHtml}
               <div id="game-mount" class="stack" style="align-items: center; width: 100%;"></div>
             </section>
             ${renderWishlistCard(state.wishlist)}

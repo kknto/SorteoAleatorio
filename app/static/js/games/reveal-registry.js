@@ -1,42 +1,5 @@
 export const REVEAL_GAMES = [
   {
-    id: "mystery-box",
-    label: "🎁 Caja Misteriosa",
-    mount(container, { onComplete }) {
-      let taps = 0;
-      const requiredTaps = 3;
-
-      container.innerHTML = `
-        <p class="muted">Toca la caja <strong>3 veces</strong> para romper el sello mágico y descubrir a quién le darás regalo.</p>
-        <button type="button" class="gift-box-btn" id="gift-box-btn" aria-label="Abrir caja misteriosa">
-          <div class="gift-box-lid"></div>
-          <div class="gift-box-bow">🎀</div>
-          <div class="gift-box-body"></div>
-        </button>
-        <div class="badge badge-revealed" id="tap-counter">Toques: 0 / ${requiredTaps}</div>
-      `;
-
-      const btn = container.querySelector("#gift-box-btn");
-      const counter = container.querySelector("#tap-counter");
-
-      btn.addEventListener("click", async () => {
-        if (taps >= requiredTaps) return;
-        taps += 1;
-        btn.classList.remove("shake");
-        void btn.offsetWidth;
-        btn.classList.add("shake");
-        counter.textContent = `Toques: ${taps} / ${requiredTaps}`;
-
-        if (taps >= requiredTaps) {
-          btn.classList.add("opened");
-          btn.disabled = true;
-          counter.textContent = "¡Sello roto! Revelando...";
-          setTimeout(() => onComplete(), 450);
-        }
-      });
-    },
-  },
-  {
     id: "wheel",
     label: "🎡 Ruleta Secreta",
     mount(container, { onComplete }) {
