@@ -123,7 +123,7 @@ async function renderDashboard(appEl, { silent = false } = {}) {
           <tr>
             <td>
               <strong>${escapeHtml(p.name)}</strong>
-              ${p.wishlist ? `<div class="muted" style="font-size: 0.78rem;">📝 Lista de deseos lista</div>` : ""}
+              ${p.has_wishlist ? `<div class="muted" style="font-size: 0.78rem;">📝 Lista de deseos lista</div>` : ""}
             </td>
             <td>${assignedCell}</td>
             <td>${statusBadge}</td>

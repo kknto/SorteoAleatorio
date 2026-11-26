@@ -95,12 +95,22 @@ def test_full_15_participant_flow_wishlist_hints_and_export() -> None:
     giver = participants[0]
     receiver = by_id[giver["assigned_to_id"]]
 
-    # 6. Receiver updates their wishlist
+    # 6. Receiver updates their wishlist with text, link, and image
     wl_res = client.put(
         f"/api/p/{receiver['token']}/wishlist",
-        json={"wishlist": "Café en grano o taza térmica"},
+        json={
+            "wishlist": "Café en grano o taza térmica",
+            "links": [{"title": "Taza en Amazon", "url": "https://example.com/taza"}],
+            "images": ["data:image/jpeg;base64,/9j/4AAQSkZJRg=="],
+        },
     )
     assert wl_res.status_code == 200
+
+    bad_wl = client.put(
+        f"/api/p/{receiver['token']}/wishlist",
+        json={"wishlist": "", "links": [{"title": "XSS", "url": "javascript:alert(1)"}], "images": []},
+    )
+    assert bad_wl.status_code == 400
 
     # 7. Anti-prefetch: GET does not reveal or confirm
     pre_get = client.get(f"/api/p/{giver['token']}").json()
@@ -109,13 +119,16 @@ def test_full_15_participant_flow_wishlist_hints_and_export() -> None:
     assert pre_get["assigned_to_name"] is None
     assert pre_get["budget"] == "$350 MXN"
 
-    # 8. Giver reveals and confirms reading, sees receiver's wishlist
+    # 8. Giver reveals and confirms reading, sees receiver's wishlist, links & images
     assert client.post(f"/api/p/{giver['token']}/reveal").status_code == 200
     assert client.post(f"/api/p/{giver['token']}/confirm").status_code == 200
     post_get = client.get(f"/api/p/{giver['token']}").json()
     assert post_get["confirmed"] is True
     assert post_get["assigned_to_name"] == receiver["name"]
     assert post_get["assigned_to_wishlist"] == "Café en grano o taza térmica"
+    assert len(post_get["assigned_to_links"]) == 1
+    assert post_get["assigned_to_links"][0]["title"] == "Taza en Amazon"
+    assert len(post_get["assigned_to_images"]) == 1
 
     # 9. Anonymous hints between giver and receiver
     hint_res = client.post(

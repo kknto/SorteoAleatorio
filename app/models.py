@@ -42,6 +42,8 @@ class Participant(Base):
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     token: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     wishlist: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    wishlist_links: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    wishlist_images: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     assigned_to_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("participants.id", ondelete="SET NULL"),

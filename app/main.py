@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 from pathlib import Path
 import secrets
 from typing import Literal, Optional
@@ -82,8 +83,15 @@ class ExecuteDrawRequest(BaseModel):
     force: bool = False
 
 
+class WishlistLinkItem(BaseModel):
+    title: str = Field(default="", max_length=80)
+    url: str = Field(..., min_length=8, max_length=500)
+
+
 class WishlistRequest(BaseModel):
     wishlist: str = Field(default="", max_length=600)
+    links: list[WishlistLinkItem] = Field(default_factory=list, max_length=5)
+    images: list[str] = Field(default_factory=list, max_length=3)
 
 
 class SecretMessageRequest(BaseModel):
@@ -142,6 +150,7 @@ def _serialize_draw(draw: Draw) -> dict:
                 "name": p.name,
                 "token": p.token,
                 "wishlist": p.wishlist or "",
+                "has_wishlist": bool(p.wishlist or (p.wishlist_links and p.wishlist_links != "[]") or (p.wishlist_images and p.wishlist_images != "[]")),
                 "assigned_to_id": p.assigned_to_id,
                 "assigned_to_name": id_to_name.get(p.assigned_to_id) if p.assigned_to_id else None,
                 "revealed_at": p.revealed_at.isoformat() if p.revealed_at else None,
@@ -180,6 +189,29 @@ def _clean_optional(val: Optional[str]) -> Optional[str]:
         return None
     stripped = val.strip()
     return stripped if stripped else None
+
+
+def _parse_json_list(raw: Optional[str]) -> list:
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, list) else []
+    except json.JSONDecodeError:
+        return []
+
+
+def _is_valid_http_url(url: str) -> bool:
+    lower = url.strip().lower()
+    return lower.startswith("https://") or lower.startswith("http://")
+
+
+def _is_valid_image_src(src: str) -> bool:
+    stripped = src.strip()
+    lower = stripped.lower()
+    if lower.startswith("data:image/"):
+        return len(stripped) <= 300_000
+    return _is_valid_http_url(stripped) and len(stripped) <= 500
 
 
 # --- Health & SPA Pages ---
@@ -550,12 +582,16 @@ def get_participant_view(token: str, db: Session = Depends(get_db)) -> dict:
 
     assigned_name = None
     assigned_wishlist = None
+    assigned_links: list[dict] = []
+    assigned_images: list[str] = []
     to_giftee_messages: list[dict] = []
     from_santa_messages: list[dict] = []
 
     if draw.status == "drawn" and participant.revealed_at is not None and participant.assigned_to is not None:
         assigned_name = participant.assigned_to.name
         assigned_wishlist = participant.assigned_to.wishlist or ""
+        assigned_links = _parse_json_list(participant.assigned_to.wishlist_links)
+        assigned_images = _parse_json_list(participant.assigned_to.wishlist_images)
 
         giftee_msgs = db.execute(
             select(SecretMessage)
@@ -607,8 +643,12 @@ def get_participant_view(token: str, db: Session = Depends(get_db)) -> dict:
         "confirmed": participant.confirmed_at is not None,
         "confirmed_at": participant.confirmed_at.isoformat() if participant.confirmed_at else None,
         "wishlist": participant.wishlist or "",
+        "wishlist_links": _parse_json_list(participant.wishlist_links),
+        "wishlist_images": _parse_json_list(participant.wishlist_images),
         "assigned_to_name": assigned_name,
         "assigned_to_wishlist": assigned_wishlist,
+        "assigned_to_links": assigned_links,
+        "assigned_to_images": assigned_images,
         "to_giftee_messages": to_giftee_messages,
         "from_santa_messages": from_santa_messages,
     }
@@ -666,9 +706,37 @@ def confirm_read(token: str, db: Session = Depends(get_db)) -> dict:
 @app.put("/api/p/{token}/wishlist")
 def update_wishlist(token: str, payload: WishlistRequest, db: Session = Depends(get_db)) -> dict:
     participant = _get_participant_by_token(db, token)
+
+    clean_links = []
+    for item in payload.links:
+        url = item.url.strip()
+        if not _is_valid_http_url(url):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Los enlaces deben comenzar con https:// o http://",
+            )
+        title = item.title.strip() or url
+        clean_links.append({"title": title[:80], "url": url[:500]})
+
+    clean_images = []
+    for src in payload.images:
+        img = src.strip()
+        if not _is_valid_image_src(img):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Imagen inválida o demasiado pesada (usa URL https:// o imagen comprimida).",
+            )
+        clean_images.append(img)
+
     participant.wishlist = payload.wishlist.strip()
+    participant.wishlist_links = json.dumps(clean_links, ensure_ascii=False)
+    participant.wishlist_images = json.dumps(clean_images, ensure_ascii=False)
     db.commit()
-    return {"wishlist": participant.wishlist}
+    return {
+        "wishlist": participant.wishlist,
+        "links": clean_links,
+        "images": clean_images,
+    }
 
 
 @app.post("/api/p/{token}/messages")

@@ -53,15 +53,88 @@ function renderMessagesHtml(messages, otherLabel) {
   `;
 }
 
+function compressImageFile(file, maxDim = 640, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Archivo de imagen inválido."));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderGifteeWishlistContent(state) {
+  const hasText = Boolean(state.assigned_to_wishlist);
+  const links = state.assigned_to_links || [];
+  const images = state.assigned_to_images || [];
+
+  if (!hasText && links.length === 0 && images.length === 0) {
+    return '<span class="muted">Todavía no ha escrito sus preferencias. ¡Puedes enviarle una pregunta anónima abajo!</span>';
+  }
+
+  return `
+    <div class="stack" style="gap: 0.65rem;">
+      ${hasText ? `<div style="white-space: pre-wrap;">${escapeHtml(state.assigned_to_wishlist)}</div>` : ""}
+      ${
+        links.length > 0
+          ? `<div class="wishlist-links-list">
+              ${links
+                .map(
+                  (l) =>
+                    `<span class="wishlist-link-chip">🔗 <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.title || l.url)}</a></span>`
+                )
+                .join("")}
+            </div>`
+          : ""
+      }
+      ${
+        images.length > 0
+          ? `<div class="wishlist-images-grid">
+              ${images
+                .map(
+                  (src) =>
+                    `<a class="wishlist-thumb" href="${escapeHtml(src)}" target="_blank" rel="noopener noreferrer" title="Ver imagen completa">
+                      <img src="${escapeHtml(src)}" alt="Referencia de regalo" loading="lazy" />
+                    </a>`
+                )
+                .join("")}
+            </div>`
+          : ""
+      }
+    </div>
+  `;
+}
+
 export async function renderParticipantToken(appEl, token) {
   appEl.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>Abriendo tu invitación secreta...</p></div>`;
 
   let selectedMode = REVEAL_GAMES[0].id;
   let hideName = false;
+  let draftLinks = [];
+  let draftImages = [];
 
   async function loadAndRender() {
     try {
       const state = await apiFetch(`/api/p/${encodeURIComponent(token)}`);
+      draftLinks = [...(state.wishlist_links || [])];
+      draftImages = [...(state.wishlist_images || [])];
       const chipsHtml = renderEventChips(state);
 
       if (state.draw_status !== "drawn") {
@@ -152,8 +225,8 @@ export async function renderParticipantToken(appEl, token) {
               </div>
               <div class="kpi-card" style="margin-top: 1rem; text-align: left;">
                 <div class="kpi-label">🎁 Lista de deseos de ${escapeHtml(state.assigned_to_name || "tu amigo")}</div>
-                <div style="margin-top: 0.35rem; white-space: pre-wrap; font-size: 0.92rem;">
-                  ${state.assigned_to_wishlist ? escapeHtml(state.assigned_to_wishlist) : '<span class="muted">Todavía no ha escrito sus preferencias. ¡Puedes enviarle una pregunta anónima abajo!</span>'}
+                <div style="margin-top: 0.45rem; font-size: 0.92rem;">
+                  ${renderGifteeWishlistContent(state)}
                 </div>
               </div>
             </div>
@@ -285,28 +358,152 @@ export async function renderParticipantToken(appEl, token) {
       <section class="card stack">
         <div>
           <h2 style="margin: 0; font-size: 1.15rem;">📝 Mi Lista de Deseos</h2>
-          <p class="muted" style="margin: 0.25rem 0 0; font-size: 0.84rem;">Ayuda a quien te va a regalar anotando ideas, talla, colores o gustos.</p>
+          <p class="muted" style="margin: 0.25rem 0 0; font-size: 0.84rem;">Agrega ideas, enlaces de tiendas (Amazon, MercadoLibre, etc.) o hasta 3 imágenes de referencia.</p>
         </div>
-        <form id="wishlist-form" class="stack" style="gap: 0.65rem;">
-          <textarea id="wishlist-input" rows="2" maxlength="600" placeholder="Ej. Me gustan los chocolates amargos, calcetines divertidos o libros de ciencia ficción. Talla M.">${escapeHtml(currentWishlist || "")}</textarea>
+        <form id="wishlist-form" class="stack" style="gap: 0.85rem;">
           <div>
-            <button type="submit" class="btn btn-secondary btn-sm">💾 Guardar mi lista</button>
+            <label for="wishlist-input">Notas, tallas o ideas</label>
+            <textarea id="wishlist-input" rows="2" maxlength="600" placeholder="Ej. Me gustan los chocolates amargos, calcetines divertidos o libros. Talla M.">${escapeHtml(currentWishlist || "")}</textarea>
+          </div>
+
+          <div class="stack" style="gap: 0.45rem;">
+            <label>Enlaces de referencia (máx. 5)</label>
+            <div class="wishlist-links-list" id="draft-links-list"></div>
+            <div class="grid-2" style="gap: 0.5rem;">
+              <input id="new-link-title" type="text" maxlength="80" placeholder="Nombre (ej. Audífonos)" />
+              <div style="display: flex; gap: 0.45rem;">
+                <input id="new-link-url" type="text" maxlength="500" placeholder="https://..." />
+                <button type="button" class="btn btn-secondary btn-sm" id="add-link-btn">+ Enlace</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="stack" style="gap: 0.45rem;">
+            <label>Imágenes de referencia (máx. 3)</label>
+            <div class="wishlist-images-grid" id="draft-images-grid"></div>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+              <input id="new-image-file" type="file" accept="image/*" style="max-width: 240px;" />
+              <input id="new-image-url" type="text" maxlength="500" placeholder="O pega URL de imagen (https://...)" style="flex: 1; min-width: 180px;" />
+              <button type="button" class="btn btn-secondary btn-sm" id="add-image-url-btn">+ URL</button>
+            </div>
+          </div>
+
+          <div>
+            <button type="submit" class="btn btn-primary btn-sm">💾 Guardar mi lista</button>
           </div>
         </form>
       </section>
     `;
   }
 
+  function renderDraftLinksAndImages() {
+    const linksEl = document.getElementById("draft-links-list");
+    const imgsEl = document.getElementById("draft-images-grid");
+    if (linksEl) {
+      linksEl.innerHTML = draftLinks
+        .map(
+          (l, idx) => `
+          <span class="wishlist-link-chip">
+            🔗 <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.title || l.url)}</a>
+            <button type="button" class="chip-remove remove-link-btn" data-idx="${idx}" title="Quitar">✕</button>
+          </span>
+        `
+        )
+        .join("");
+      linksEl.querySelectorAll(".remove-link-btn").forEach((b) => {
+        b.addEventListener("click", () => {
+          draftLinks.splice(Number(b.dataset.idx), 1);
+          renderDraftLinksAndImages();
+        });
+      });
+    }
+
+    if (imgsEl) {
+      imgsEl.innerHTML = draftImages
+        .map(
+          (src, idx) => `
+          <div class="wishlist-thumb">
+            <img src="${escapeHtml(src)}" alt="Imagen ${idx + 1}" />
+            <button type="button" class="thumb-remove remove-img-btn" data-idx="${idx}" title="Quitar">✕</button>
+          </div>
+        `
+        )
+        .join("");
+      imgsEl.querySelectorAll(".remove-img-btn").forEach((b) => {
+        b.addEventListener("click", () => {
+          draftImages.splice(Number(b.dataset.idx), 1);
+          renderDraftLinksAndImages();
+        });
+      });
+    }
+  }
+
   function bindWishlistForm(tok) {
     const form = document.getElementById("wishlist-form");
     if (!form) return;
+
+    renderDraftLinksAndImages();
+
+    document.getElementById("add-link-btn").addEventListener("click", () => {
+      if (draftLinks.length >= 5) {
+        showToast("Máximo 5 enlaces por participante", "error");
+        return;
+      }
+      const title = document.getElementById("new-link-title").value.trim();
+      const url = document.getElementById("new-link-url").value.trim();
+      if (!/^https?:\/\//i.test(url)) {
+        showToast("El enlace debe iniciar con https:// o http://", "error");
+        return;
+      }
+      draftLinks.push({ title: title || url, url });
+      document.getElementById("new-link-title").value = "";
+      document.getElementById("new-link-url").value = "";
+      renderDraftLinksAndImages();
+    });
+
+    document.getElementById("new-image-file").addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      if (draftImages.length >= 3) {
+        showToast("Máximo 3 imágenes por participante", "error");
+        return;
+      }
+      try {
+        const compressed = await compressImageFile(file);
+        draftImages.push(compressed);
+        renderDraftLinksAndImages();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    });
+
+    document.getElementById("add-image-url-btn").addEventListener("click", () => {
+      if (draftImages.length >= 3) {
+        showToast("Máximo 3 imágenes por participante", "error");
+        return;
+      }
+      const url = document.getElementById("new-image-url").value.trim();
+      if (!/^https?:\/\//i.test(url)) {
+        showToast("La URL de imagen debe iniciar con https:// o http://", "error");
+        return;
+      }
+      draftImages.push(url);
+      document.getElementById("new-image-url").value = "";
+      renderDraftLinksAndImages();
+    });
+
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const wishlist = document.getElementById("wishlist-input").value;
       try {
         await apiFetch(`/api/p/${encodeURIComponent(tok)}/wishlist`, {
           method: "PUT",
-          body: JSON.stringify({ wishlist }),
+          body: JSON.stringify({
+            wishlist,
+            links: draftLinks,
+            images: draftImages,
+          }),
         });
         showToast("Lista de deseos guardada");
       } catch (err) {

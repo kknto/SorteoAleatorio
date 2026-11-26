@@ -31,6 +31,8 @@ def ensure_schema_columns() -> None:
         },
         "participants": {
             "wishlist": "TEXT",
+            "wishlist_links": "TEXT",
+            "wishlist_images": "TEXT",
         },
     }
     with engine.begin() as conn:
